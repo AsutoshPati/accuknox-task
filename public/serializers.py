@@ -73,6 +73,13 @@ class UserSerializer(serializers.ModelSerializer):
         return data
 
 
+class UserViewSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = User
+        exclude = ['uid', 'email', 'dob', 'password', 'created_at', 'last_updated_at', 'is_active']
+
+
 class AuthUserSerializer(serializers.ModelSerializer):
 
     class Meta:

@@ -2,12 +2,13 @@ from datetime import timedelta
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from public.serializers import UserSerializer
+from public.serializers import UserViewSerializer
 from .models import *
 from .serializers import *
 
@@ -16,26 +17,27 @@ from .serializers import *
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_users(request):
-    if len(request.query_params) != 1 or 'search' not in request.query_params:
-        return Response({'status': 400, 'message': "Only 'search' parameter should be provided"}, status=400)
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    paginator.page_query_param = 'page'
+
+    if 'search' not in request.query_params:
+        return Response({'status': 400, 'message': "'search' parameter should be provided"}, status=400)
 
     search_key = request.query_params['search'].strip().lower()
     if len(search_key) < 3:
         return Response({'status': 400, 'message': "Please provide atleast 3 characters"}, status=400)
 
-    users = []
-    searched_users = User.objects.filter(email=search_key).first()
+    searched_users = User.objects.filter(email=search_key).all()
     if searched_users:
-        users.append({'uid': searched_users.uid, 'name': searched_users.name, 'gender': searched_users.gender,
-                      'city': searched_users.city, 'state': searched_users.state, 'bio': searched_users.bio})
+        p = paginator.paginate_queryset(queryset=searched_users, request=request)
+        serializer = UserViewSerializer(p, many=True)
     else:
         searched_users = User.objects.filter(name__icontains=search_key).all()
-        for user in searched_users:
-            users.append(
-                {'uid': user.uid, 'name': user.name, 'gender': user.gender, 'city': user.city, 'state': user.state,
-                 'bio': user.bio})
+        p = paginator.paginate_queryset(queryset=searched_users, request=request)
+        serializer = UserViewSerializer(p, many=True)
 
-    return Response({'status': 200, 'users': users}, status=200)
+    return paginator.get_paginated_response(serializer.data)
 
 
 class FriendView(APIView):
