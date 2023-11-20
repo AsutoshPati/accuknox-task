@@ -1,4 +1,6 @@
+from datetime import timedelta
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -42,7 +44,14 @@ class FriendView(APIView):
 
     def get(self, request):
         auth_user = User.objects.filter(email=request.user.username).first()
-        friend_details = FriendStack.objects.filter(Q(sender=auth_user.uid) | Q(receiver=auth_user.uid)).all()
+
+        query = FriendStack.objects.filter(Q(sender=auth_user.uid) | Q(receiver=auth_user.uid))
+        if request.query_params or 'filter' in request.query_params:
+            if request.query_params['filter'] == 'A':
+                query = query.filter(status='A')
+            elif request.query_params['filter'] == 'P':
+                query = query.filter(status='P')
+        friend_details = query.all()
         response = []
         for detail in friend_details:
             response.append({'fid': detail.fid, 'sender': detail.sender.name, 'receiver': detail.receiver.name,
@@ -58,6 +67,11 @@ class FriendView(APIView):
         receiver = User.objects.filter(uid=validated_data.data['receiver']).first()
         if sender.uid == receiver.uid:
             return Response({'status': 400, 'message': "Friend request can't be sent to self"}, status=400)
+
+        one_minute_ago = timezone.now() + timedelta(minutes=-1)
+        friend_requests = FriendStack.objects.filter(sender=sender.uid, created_at__gte=one_minute_ago).order_by('-created_at').all()
+        if len(friend_requests) >= 3:
+            return Response({'status': 400, 'message': "More than 3 friend requests can't be send in a minute"}, status=400)
 
         friend_detail = FriendStack.objects.filter(
             Q(sender=sender.uid, receiver=receiver.uid) | Q(sender=receiver.uid, receiver=sender.uid)).first()
