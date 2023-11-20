@@ -1,0 +1,36 @@
+version: '3.7'
+
+services:
+  db:
+    # PostgreSQL Service
+    image: postgres:13.3-alpine
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - PGPORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+    restart: "on-failure"
+
+  web:
+    # Django Service
+    build: .
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    command: sh -c "python manage.py makemigrations &&
+      python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    restart: "on-failure"
+
+volumes:
+  postgres_data:
+  static_volume:
